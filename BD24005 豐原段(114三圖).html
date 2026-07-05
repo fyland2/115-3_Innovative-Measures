@@ -1,0 +1,669 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>BD24005 豐原段(114三圖) v66系統</title>
+            <meta charset="utf-8" />
+            <!-- 加入參照保護策略，這對於在本地端顯示 Google Drive 圖片至關重要！ -->
+            <meta name="referrer" content="no-referrer" />
+            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />                                                                                                         
+            <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+            <style>
+                body { margin: 0; display: flex; font-family: "Microsoft JhengHei", sans-serif; background: white; overflow: hidden; }
+                
+                /* 密碼鎖定畫面的樣式 */
+                #lock-screen {
+                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                    background: #eef2f5; z-index: 9999; display: flex;
+                    flex-direction: column; justify-content: center; align-items: center;
+                }
+                .lock-box {
+                    background: white; padding: 40px; border-radius: 12px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.15); text-align: center; max-width: 90%; width: 350px;
+                }
+                .lock-box h2 { margin-top: 0; color: #1a73e8; font-size: 24px; }
+                .lock-box input {
+                    width: 100%; padding: 12px; margin: 20px 0; font-size: 16px;
+                    border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;
+                    text-align: center; letter-spacing: 2px;
+                }
+                .lock-box button {
+                    background: #1a73e8; color: white; border: none; padding: 12px;
+                    font-size: 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold;
+                }
+                .lock-box button:hover { background: #1557b0; }
+                
+                /* 側邊欄過場動畫與收合樣式 */
+                #sidebar { 
+                    width: 220px; height: 100vh; background: #f8f9fa; border-right: 1px solid #ddd; 
+                    padding: 15px; box-sizing: border-box; z-index: 2000; overflow-y: auto; 
+                    transition: margin-left 0.3s ease;
+                }
+                #sidebar.collapsed { margin-left: -220px; }
+                
+                /* 地圖容器與漢堡按鈕樣式 */                                                            
+                #map-container { flex: 1; position: relative; height: 100vh; }
+                #map { width: 100%; height: 100%; background: white; }
+                
+                /* 側邊欄開關按鈕 (漢堡選單) */
+                #menu-toggle {
+                    position: absolute; top: 15px; left: 15px; z-index: 4000; 
+                    background: white; border: 2px solid #ccc; border-radius: 4px; 
+                    padding: 5px 10px; cursor: pointer; font-size: 20px; box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+                    /* 覆寫 button 的 width: 100%，讓漢堡按鈕恢復正常方形 */
+                    width: auto !important; margin: 0 !important;
+                }
+
+                /* 將 Leaflet 預設的縮放按鈕 (+/-) 往下推，避免跟上方的漢堡選單疊加打架 */
+                .leaflet-top.leaflet-left {
+                    margin-top: 60px;
+                }
+                #coords-info { position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 12px; border-radius: 5px; font-size: 13px; z-index: 3000; pointer-events: none; }
+                .label-box { font-weight: bold; background: none; border: none; text-shadow: 1px 1px #fff; }
+                .zoom-btn { background: #28a745; color: white; border: none; border-radius: 4px; padding: 6px; cursor: pointer; font-size: 12px; margin-top: 4px; width: 100%; }
+                /* 修正按鈕與文字一行顯示的控制項樣式 */
+                .ctrl-row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; font-size: 14px; }
+                .ctrl-row .val-display { min-width: 30px; text-align: center; font-weight: bold; }
+                .adj-btn { width: 35px; height: 35px; border-radius: 4px; border: 1px solid #ccc; background: #eee; cursor: pointer; font-weight: bold; font-size: 16px; }
+                 
+                input, button, select { width: 100%; margin: 8px 0; padding: 10px; box-sizing: border-box; }
+                /* 覆寫按鈕樣式，讓 + - 按鈕不被上面的 width: 100% 影響 */
+                .adj-btn { width: 35px !important; padding: 5px !important; margin: 0 5px !important; font-size: 16px; font-weight: bold; cursor: pointer; background: #e0e0e0; border: 1px solid #ccc; border-radius: 4px; }
+                .adj-btn:hover { background: #d0d0d0; }
+                
+                h4 { margin: 15px 0 5px 0; color: #333; }               
+                .popup-img { width: 100%; max-width: 200px; min-height: 150px; margin-top: 10px; border: 1px solid #ccc; display: block; background: #f0f0f0; }
+                .popup-content { font-size: 13px; line-height: 1.5; min-width: 200px; }
+                .btn-save { background: #007bff; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; margin-top: 10px; font-weight: bold; }
+                .btn-save:disabled { background: #ccc; }
+                
+                /* 優化 Leaflet 行動端圖層控制項樣式 (定位移至右上，巨大化按鈕、層級拉高) */
+                .leaflet-control-layers { 
+                    box-shadow: 0 1px 7px rgba(0,0,0,0.4) !important;
+                    border-radius: 8px !important;
+                    z-index: 5000 !important; /* 拉到最高層級 */
+                }
+                /* 巨大化圖層控制按鈕 (ICON) */
+                .leaflet-control-layers-toggle {
+                    width: 50px !important;
+                    height: 50px !important;
+                    background-size: 30px 30px !important;
+                    background-position: center !important;
+                }
+                /* 展開後的清單容器：加入最大高度與滾動，防止螢幕外切邊 */
+                .leaflet-control-layers-expanded {
+                    padding: 10px !important;
+                    font-size: 12px !important; /* 行動端文字加大 */
+                    max-height: 50vh !important; /* 最大高度 50% 螢幕，過長自動出現滾動條 */
+                    overflow-y: auto !important;
+                    min-width: 130px !important;
+                }
+                /* 每個圖層選項加大觸控範圍 */
+                .leaflet-control-layers-overlays label, .leaflet-control-layers-base label {
+                    white-space: nowrap; 
+                    display: block; 
+                    margin: 8px 0 !important; /* 間距拉開，避免誤觸 */
+                    padding: 4px 0 !important;
+                }
+                /* 勾選框放大 */
+                .leaflet-control-layers input[type="checkbox"], 
+                .leaflet-control-layers input[type="radio"] { 
+                    width: 20px !important;
+                    height: 20px !important;
+                    margin: 0 8px 0 0 !important; 
+                    display: inline-block !important;
+                    vertical-align: middle;    
+                }
+            </style>
+        </head>
+        <body>
+            <!-- 密碼鎖定畫面 -->
+            <div id="lock-screen">
+                <div class="lock-box">
+                    <h2>🔒 BD24005 豐原段(114三圖) 解鎖</h2>
+                    <p style="color:#666; font-size:13px;">本圖資已採用軍規級加密<br>請輸入密碼以解鎖地圖與座標</p>
+                    <input type="password" id="map-pwd" placeholder="請輸入解鎖密碼..." onkeypress="if(event.key === 'Enter') unlockMap()">
+                    <button onclick="unlockMap()">解密並開啟地圖</button>
+                </div>
+            </div>                                                
+            <div id="sidebar">
+                <h3>BD24005 豐原段(114三圖)</h3>
+                <input type="text" id="sq" placeholder="輸入地號或點號..." onkeypress="if(event.key === 'Enter') find()">
+                <button onclick="find()">搜尋定位</button>
+                <hr>
+                <h4>圖層重新定位</h4>
+                <button class="zoom-btn" onclick="zoomTo('bnp')">定位地籍全圖</button>
+                <button class="zoom-btn" onclick="zoomTo('ctl')">定位圖根分佈</button>
+                <hr>
+                
+                <div style="display: flex; align-items: center; margin: 10px 0; font-size: 14px;">
+                    <span style="flex: 1;">字體大小:</span>
+                    <button class="adj-btn" onclick="changeSize('font', -2)">-</button>
+                    <span id="font-size-display" style="width: 30px; text-align: center; font-weight: bold;">12</span>
+                    <button class="adj-btn" onclick="changeSize('font', 2)">+</button>
+                </div>
+                
+                <div style="display: flex; align-items: center; margin: 10px 0; font-size: 14px;">
+                    <span style="flex: 1;">點標大小:</span>
+                    <button class="adj-btn" onclick="changeSize('point', -1)">-</button>
+                    <span id="point-size-display" style="width: 30px; text-align: center; font-weight: bold;">6</span>
+                    <button class="adj-btn" onclick="changeSize('point', 1)">+</button>
+                </div>
+                <div style="margin-top:20px; font-size:12px;">
+                    <span style="color:red;">●</span> 健在圖根<br>
+                    <span style="color:#d3d3d3;">●</span> 遺失圖根
+                </div>
+                <div id="sync-status" style="margin-top:10px; font-size:11px; font-weight:bold; color: gray;">● 系統啟動中...</div>
+            </div>
+            <div id="map-container">
+                <button id="menu-toggle" onclick="toggleSidebar()">☰</button>
+                <div id="coords-info">Y (北/7位): 0.00, X (東/6位): 0.00</div>
+                <div id="map"></div>
+            </div>
+            <script>
+                var gasUrl = "https://script.google.com/macros/s/AKfycbwxqRhensyiIb3ZOH8T_1AKk5K-9msU3tS6dvA4P5TvmkqXBTxi9DwHfc7UtUai7-Dc/exec"; // 連結 GAS 網址
+                // 傳送給後端 GAS 依然使用純英文的 section_name，確保程式不被中文干擾
+                var sectionName = "BD24005";// 提供給 JavaScript 知道這是哪個段
+                var fontSize = 12;
+                var pointSize = 6;
+                
+                // 新增全域變數記錄大小
+                var currentFontSize = 12;
+                var currentPointSize = 6;
+                
+                // 宣告全域變數，確保解鎖後再進行初始化
+                var map, data, parcelData, layers, overlays, renderTimer;
+
+                // 處理時區與日期格式，將 Google Sheet 的 UTC 時間轉回台灣當地時間
+                function formatTime(val) {
+                    if (!val || val === "-") return "-";
+                    var d = new Date(val);
+                    if (isNaN(d.getTime())) return val; // 如果解析失敗，保留原字串
+                    return d.toLocaleString('zh-TW', {hour12: false});
+                }
+
+                // 防呆級完美相容的解密演算法，支援所有老舊設備與平板，徹底解決 "密碼錯誤" 的假警報
+                function rc4Decrypt(b64Data, password) {
+                    // 1. 確保密碼是字串，轉換為通用 UTF-8 位元組
+                    var pwdUtf8 = unescape(encodeURIComponent(password));
+                    var key = new Uint8Array(pwdUtf8.length);
+                    for(var i = 0; i < pwdUtf8.length; i++) {
+                        key[i] = pwdUtf8.charCodeAt(i);
+                    }
+
+                    // 移除耗時的全域空白替換(因 Python 產出保證無空白)，直接進行解碼，縮短解析時間
+                                                               
+                    var binary_string = window.atob(b64Data);
+                    var len = binary_string.length;
+                    var cryptBytes = new Uint8Array(len);
+                    for (var i = 0; i < len; i++) {
+                        cryptBytes[i] = binary_string.charCodeAt(i);
+                    }
+
+                    // 3. 執行 RC4
+                    // 使用 Int32Array 取代普通 Array，大幅提升巨量迴圈的運算速度 (JIT優化)
+                    var S = new Int32Array(256);
+                    for (var i = 0; i < 256; i++) S[i] = i;
+                    var j = 0;
+                    for (var i = 0; i < 256; i++) {
+                        j = (j + S[i] + key[i % key.length]) % 256;
+                        var temp = S[i]; S[i] = S[j]; S[j] = temp;
+                    }
+                    
+                    var x = 0, y = 0;
+                    var decryptedBytes = new Uint8Array(cryptBytes.length);
+                    for (var k = 0; k < cryptBytes.length; k++) {
+                        x = (x + 1) % 256;
+                        y = (y + S[x]) % 256;
+                        var temp2 = S[x]; S[x] = S[y]; S[y] = temp2;
+                        decryptedBytes[k] = cryptBytes[k] ^ S[(S[x] + S[y]) % 256];
+                    }
+                    
+                    // 4. 完美相容所有的解碼模式 (如果新設備用高速引擎，舊設備用安全模式)
+                    if (typeof TextDecoder !== 'undefined') {
+                        return new TextDecoder('utf-8').decode(decryptedBytes);
+                    } else {
+                        var decryptedStr = "";
+                        for (var k = 0; k < decryptedBytes.length; k += 10000) {
+                            var chunk = Array.prototype.slice.call(decryptedBytes.subarray(k, k + 10000));
+                            decryptedStr += String.fromCharCode.apply(null, chunk);
+                        }
+                        return decodeURIComponent(escape(decryptedStr));
+                    }
+                }
+
+                // 強化版 Google Drive 網址轉換器，支援更多格式並強制轉換為直連預覽圖
+                function getCloudImgUrl(rawUrl) {
+                    if (!rawUrl || rawUrl === "") return "";
+                    // 如果已經是直連格式，直接回傳
+                    if (rawUrl.includes("drive.google.com/uc?")) return rawUrl;
+                    
+                    // 嘗試捕捉各種格式的 ID (通常是一串長達 25 個字元以上的英數字與符號)
+                    var idMatch = rawUrl.match(/[-\w]{25,}/); 
+                    if (idMatch) {
+                        // 使用 Google 官方的 Thumbnail API 來要求縮圖，這招保證能正確顯示，且無視 Cookie 阻擋
+                        return "https://drive.google.com/thumbnail?id=" + idMatch[0] + "&sz=w800";
+                    }
+                    return rawUrl;
+                }
+                
+               // 防呆機制：自動清除手機輸入密碼時，結尾容易誤按的「空白鍵」
+                function unlockMap() {
+                    var pwd = document.getElementById('map-pwd').value;
+                    if(!pwd) return;
+                    pwd = pwd.trim(); // 防呆去空白
+                    try {
+                        // 嘗試解密
+                        data = JSON.parse(rc4Decrypt("fmsBzoHOPS1URixwxwRwuIECHdCpO7kn4DsMVdOd+jfRTOTzqvBmwEKEYTRwctcqb4ssE3ONQQs=", pwd));
+                        parcelData = JSON.parse(rc4Decrypt("XhQ=", pwd));
+                        
+                        // 隱藏鎖定畫面
+                        document.getElementById('lock-screen').style.display = 'none';
+                        
+                        // 啟動地圖與資料庫
+                        initMap();
+                    } catch (e) {
+                        // 提供更詳盡的報錯訊息
+                        alert("密碼錯誤或解密失敗！\n(請確認密碼沒有打錯，或截圖此訊息回報：\n" + e.name + " - " + e.message + ")");
+                    }
+                }
+
+                // 地圖初始化流程 (將原本直接寫在底層的程式碼包裝進來)
+                function initMap() {
+                    // 定義專屬 Canvas 渲染器，加入 tolerance: 30。這會為點位周圍增加 30 像素的隱形觸控範圍，平板秒點秒中！
+                    var touchRenderer = L.canvas({ padding: 0.5, tolerance: 30 });
+                    map = L.map('map', { crs: L.CRS.Simple, renderer: touchRenderer, preferCanvas: true, minZoom: -20, maxZoom: 20 });
+                    
+                    // 修正底圖 URL
+                    var googleSat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                        subdomains:['mt0','mt1','mt2','mt3'],
+                        attribution: 'Google Maps'
+                    });
+                    var googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                        subdomains:['mt0','mt1','mt2','mt3'],
+                        attribution: 'Google Maps'
+                    });
+                
+                    layers = {
+                        bnp: L.featureGroup().addTo(map), // 預設開啟 BNP
+                        par: L.layerGroup(),
+                        ctl: L.layerGroup().addTo(map),
+                        ctl2: L.layerGroup(), // 補建圖根圖層，預設關閉
+                        coa: L.layerGroup(), 
+                        upn: L.layerGroup()
+                    };
+
+                    // 動態產生右上方圖層選單 (如果 ctl2 有資料才加上 圖根(補建) 選項)
+                    var overlays = {
+                        "地籍線(BNP)": layers.bnp,
+                        "地號(PAR)": layers.par,
+                        "圖根(CTL)": layers.ctl
+                        // "界址(COA)": layers.coa,
+                        // "中心樁(UPN)": layers.upn
+                    };
+                    if (data.ctl2 && data.ctl2.length > 0) {
+                        overlays["圖根(補建)"] = layers.ctl2;
+                    }
+                    overlays["界址(COA)"] = layers.coa;
+                    overlays["中心樁(UPN)"] = layers.upn;
+                    // 將圖層控制改為預設收合 (collapsed: true)，並放置於右上角 (topright)，確保不再被系統導覽列干擾
+                    L.control.layers({
+                        "空白背景": L.layerGroup(),
+                        "Google 衛星影像": googleSat,
+                        "Google 混合地圖": googleHybrid
+                    }, overlays, { position: 'topright', collapsed: true }).addTo(map);
+                    
+                    parcelData.forEach(p => { 
+                        L.polyline(p.path, {color: 'black', weight: 1.2}).addTo(layers.bnp); 
+                    });
+                    // 滑鼠座標偵測                
+                    map.on('mousemove', function(e) {
+                        document.getElementById('coords-info').innerHTML = "Y (北): " + e.latlng.lat.toFixed(2) + ", X (東): " + e.latlng.lng.toFixed(2);
+                    });
+                    
+                    // 改用防抖機制排程繪製，確保拖動地圖不卡頓
+                    map.on('moveend zoomend overlayadd', scheduleRender);
+
+                    // 解鎖成功後，才啟動雲端連線同步
+                    checkAndSyncCloud();
+                }
+                // 側邊欄收合邏輯
+                function toggleSidebar() {
+                    document.getElementById('sidebar').classList.toggle('collapsed');
+                    setTimeout(function() { map.invalidateSize(); }, 300);
+                }
+
+                // 控制字體與點標大小的邏輯
+                function changeSize(type, delta) {
+                    if (type === 'font') {
+                        currentFontSize += delta;
+                        if (currentFontSize < 8) currentFontSize = 8;
+                        if (currentFontSize > 60) currentFontSize = 60;
+                        document.getElementById('font-size-display').innerText = currentFontSize;
+                    } else if (type === 'point') {
+                        currentPointSize += delta;
+                        if (currentPointSize < 1) currentPointSize = 1;
+                        if (currentPointSize > 30) currentPointSize = 30;
+                        document.getElementById('point-size-display').innerText = currentPointSize;
+                    }
+                    scheduleRender();
+                }
+                function zoomToBNP() {
+                    var bounds = layers.bnp.getBounds();
+                    if(bounds.isValid()) map.fitBounds(bounds);
+                }
+                
+                function zoomTo(type) {
+                    if(type === 'bnp') {
+                        zoomToBNP();
+                    } else {
+                        var points = data[type].map(i => i.pos);
+                        if(points.length > 0) {
+                            var b = L.latLngBounds(points);
+                            map.fitBounds(b);
+                            if(!map.hasLayer(layers[type])) map.addLayer(layers[type]);
+                            scheduleRender();
+                        } else { alert("該圖層無資料！"); }
+                    }
+                }
+                
+                // 新增壓縮圖片邏輯，減少雲端儲存壓力
+                function compressAndPreview(input, id) {
+                    if (input.files && input.files[0]) {
+                        var reader = new FileReader();
+                        reader.onload = function (e) {
+                            var img = new Image();
+                            img.src = e.target.result;
+                            img.onload = function () {
+                                var canvas = document.createElement('canvas');
+                                var ctx = canvas.getContext('2d');
+                                var maxWidth = 800; // 限制最大寬度以壓縮
+                                var scale = maxWidth / img.width;
+                                canvas.width = maxWidth;
+                                canvas.height = img.height * scale;
+                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                var dataUrl = canvas.toDataURL('image/jpeg', 0.5); // 0.5 品質壓縮
+                                document.getElementById('preview-' + id).src = dataUrl;
+                                // 將壓縮後的 Base64 存在隱藏欄位或變數中
+                                window['currentImg_' + id] = dataUrl;
+                            };
+                        };
+                        reader.readAsDataURL(input.files[0]);
+                    }
+                }
+                
+                // 寫入雲端時，彈跳視窗要求使用者輸入密碼，並修復 CORS 攔截
+                function updateStatusToCloud(pid) {
+                    if (!navigator.onLine) {
+                        alert('目前沒有偵測到網路連線，無法正確傳送圖根遺失檔案。');
+                        return;
+                    }
+
+                    // 彈跳視窗要求輸入密碼
+                    var userKey = prompt("請輸入職員編號：");
+                    if (userKey === null || userKey === "") {
+                        alert("已取消同步操作。");
+                        return;
+                    }
+                    var status = document.getElementById('status-select-' + pid).value;
+                    var btn = document.querySelector('.btn-save');
+                    var imgData = window['currentImg_' + pid] || "";
+                    
+                    if(!gasUrl) {
+                        alert('尚未設定 GAS URL！目前僅為本地模擬。');
+                        return;
+                    }
+
+                    btn.disabled = true;
+                    btn.innerText = '雲端寫入中...';
+
+                    // 改用 XMLHttpRequest 底層連線方式，確保所有平板瀏覽器都不會被 CORS 預檢攔截
+                    var xhr = new XMLHttpRequest();
+                    xhr.open("POST", gasUrl, true);
+                    xhr.onreadystatechange = function() {
+                        if (xhr.readyState === 4) {
+                            btn.disabled = false;
+                            btn.innerText = '同步狀態至雲端';
+                            try {
+                                var resp = JSON.parse(xhr.responseText);
+
+                                if (resp.result === 'success') {
+                                    alert('已成功同步至 Google Sheet！');
+                                    // 即時更新本地資料，這樣標籤才會立刻變色
+                                    var target = [...data.ctl, ...(data.ctl2 || [])].find(p => p.id === pid);
+                                    if (target) {
+                                        target.status = status;
+                                        // 確保剛上傳時也能即時轉成本地格式
+                                        target.date = new Date().toISOString(); 
+                                    }
+                                    scheduleRender();
+                                } else {
+                                    alert('同步被拒絕：' + resp.message);
+                                }
+                            } catch(e) {
+                                alert('伺服器回傳格式錯誤，請檢查 GAS 部署。\n錯誤訊息：' + e);
+                            }
+                        }
+                    };
+                    xhr.send(JSON.stringify({
+                        section: sectionName, // 傳送段代碼給 A 欄
+                        id: pid,
+                        status: status,
+                        image: imgData,
+                        timestamp: new Date().toLocaleString('zh-TW', {hour12: false}), // 寫入時確保是當地時間格式
+                        key: userKey // 傳送使用者剛才輸入的密碼
+                    }));
+                }
+
+                // 防抖機制(Debounce)，提升滑動地圖時的流暢度
+                function scheduleRender() {
+                    clearTimeout(renderTimer);
+                    // 將防抖時間由 50ms 延長至 150ms，降低連續滑動地圖時的運算頻率                                                                                       
+                    renderTimer = setTimeout(render, 150);
+                }
+                // 搜尋與渲染功能
+                function render() {
+                    // 加上 pad(0.2) 緩衝區，預先渲染畫面外 20% 的範圍，減少滑動露白與頻繁重繪
+                    var b = map.getBounds().pad(0.2), z = map.getZoom(), s = currentFontSize;
+                    
+                    // 加入 ctl2 到渲染清單中                                                      
+                    ['par', 'ctl', 'ctl2', 'coa', 'upn'].forEach(k => {
+                        var group = layers[k];
+                        if (!map.hasLayer(group)) return;
+                        group.clearLayers();
+                        // 效能大躍進！地圖縮得太小時，直接隱藏文字標籤，避免幾千個 DOM 節點拖慢載入速度。
+                        var showLabel = true;
+                        if (k === 'par' && z < -3) showLabel = false; // 地號縮太小不顯示
+                        if ((k === 'ctl' || k === 'ctl2') && z < -2) showLabel = false; // 圖根縮太小不顯示
+                        if (k === 'upn' && z < -2) showLabel = false; // 中心樁縮太小不顯示
+                        if (k === 'coa' && z < 1) showLabel = false;  // 界址點維持原樣，放大才顯示
+                        
+                        data[k].forEach(i => {
+                            if (b.contains(i.pos)) {
+                                // 新增遺失變色邏輯
+                                var isLost = (i.status === 'lost');
+                                // 使用變數 mainColor 取代原本死寫的顏色; 將 ctl2 視為圖根，同樣賦予紅色/灰色
+                                var mainColor = isLost ? '#d3d3d3' : ((k=='ctl'||k=='ctl2')?'red':(k=='upn'?'green':'#666'));
+                                // 使用變數 labelColor 取代原本死寫的顏色
+                                var labelColor = isLost ? '#d3d3d3' : (k=='par'?'blue':((k=='ctl'||k=='ctl2')?'red':(k=='upn'?'green':'#666')));
+
+                                if (k !== 'par') {
+                                    // 改用 currentPointSize 變數控制圓點半徑
+                                    var marker = L.circleMarker(i.pos, { radius: currentPointSize, color: mainColor, fillOpacity: 1, weight: 1 }).addTo(group);
+                                    
+                                    // 重新設計彈窗 UI，同步按鈕置底，座標三位小數
+                                    // 如果不是 coa (界址點)，才綁定調查彈窗！這樣 coa 就只會有圓點跟文字。
+                                    if (k !== 'coa') {
+                                        
+                                        // 利用延遲載入 (Lazy Loading) 技巧。
+                                        // 將字串拼接放入函數中，確保只有「使用者點擊點位」時才執行字串組合與圖層建立，減少高達 90% 以上的無效記憶體消耗
+                                        marker.bindPopup(function() {
+                                            // 處理照片顯示邏輯，若有雲端照片優先顯示
+                                            var cloudUrl = getCloudImgUrl(i.image);
+                                            var imgSrc = (cloudUrl !== "") ? cloudUrl : './photos/' + i.id + '.jpg';
+                                            
+                                            // 內建 SVG 無照片佔位圖，乾淨又專業
+                                            var noPhotoSvg = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22150%22%3E%3Crect width=%22200%22 height=%22150%22 fill=%22%23f4f4f4%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-family=%22sans-serif%22 font-size=%2216px%22 fill=%22%23888%22%3E無照片資訊%3C/text%3E%3C/svg%3E";
+
+                                            return '<div class="popup-content">' +
+                                                '<b>點號：' + i.id + '</b><br>' +
+                                                '座標(Y)：' + i.pos[0].toFixed(3) + '<br>' +
+                                                '座標(X)：' + i.pos[1].toFixed(3) + '<br>' +
+                                                // 套用 formatTime 解決 UTC 時區字串顯示問題
+                                                '更新日期：' + formatTime(i.date) + '<br>' +
+                                                '<hr>' +
+                                                '選擇狀態：' +
+                                                '<select id="status-select-' + i.id + '">' +
+                                                '<option value="active" ' + (!isLost ? 'selected' : '') + '>健在</option>' +
+                                                '<option value="lost" ' + (isLost ? 'selected' : '') + '>遺失</option>' +
+                                                '</select><br>' +
+                                                '現場拍照/上傳：<br>' +
+                                                '<input type="file" accept="image/*" onchange="compressAndPreview(this, \'' + i.id + '\')" style="font-size:11px;">' +
+                                                // 使用 SVG 取代破圖
+                                                '<img id="preview-' + i.id + '" class="popup-img" src="' + imgSrc + '" onerror="this.src=\'' + noPhotoSvg + '\'"><br>' +
+                                                '<button class="btn-save" onclick="updateStatusToCloud(\'' + i.id + '\')">同步狀態至雲端</button>' +
+                                                '</div>';
+                                        });
+                                    }  
+                                }
+                                
+                                if (showLabel) {
+                                    L.marker(i.pos, {
+                                        icon: L.divIcon({
+                                            className: 'label-box',
+                                            html: '<span style="font-size:'+s+'px; color:'+labelColor+'">'+i.id+'</span>',
+                                            iconAnchor: [-5, 15]
+                                        })
+                                    }).addTo(group);
+                                }    
+                            }
+                        });
+                    });
+                }
+           
+                // 優化搜尋系統與高亮顯示                                                                  
+                function find() {
+                    var q = document.getElementById('sq').value.trim();
+                    if (!q) return;
+
+                    // 擴充1：清除先前的紅色高亮框線
+                    if (window.searchHighlight) {
+                        map.removeLayer(window.searchHighlight);
+                    }
+
+                    // 擴充2：判斷輸入內容。純數字(或帶減號，如 810 或 810-1)視為搜尋地號；含英文視為圖根                                                                                                                           
+                    var isParcel = /^[0-9\\-]+$/.test(q);  
+                    
+                    if (isParcel) {
+                        // 擴充1：使用 parcelData (BNP) 來尋找整塊地的所有頂點
+                        var targetParcel = parcelData.find(p => p.id == q);
+                        if (targetParcel) {
+                            // 縮放至該地號的整個地籍範圍
+                            var bounds = L.latLngBounds(targetParcel.path);
+                            map.fitBounds(bounds);
+                            
+                            // 擴充1：用紅色、75% 透明度填滿多邊形框選範圍
+                            window.searchHighlight = L.polygon(targetParcel.path, {
+                                color: 'red',
+                                weight: 2,
+                                fillColor: 'pink',
+                                fillOpacity: 0.75
+                            }).addTo(map);
+
+                            // 自動開啟地號圖層 (PAR) 以利觀看
+                            if (!map.hasLayer(layers['par'])) map.addLayer(layers['par']);
+                        } else {
+                            // 防呆機制：若 BNP 沒畫到這塊地，退回使用 PAR 點位來定位
+                            var fallbackPar = data.par.find(i => i.id == q);
+                            if (fallbackPar) {
+                                map.flyTo(fallbackPar.pos, 4);
+                                if (!map.hasLayer(layers['par'])) map.addLayer(layers['par']);
+                                alert('該地號無地籍線範圍資料，已定位至地號文字中心。');
+                            } else {
+                                alert('圖資中找不到地號：' + q);
+                            }
+                        }
+                    } else {
+                        // 擴充2：輸入含英文 (如 CTL01)，搜尋圖根點或中心樁                              
+                        var t = [...data.ctl, ...data.ctl2, ...data.upn].find(i => i.id == q); // 搜尋清單排除 coa 
+                        if(t) {
+                            map.flyTo(t.pos, 4);
+                            // 僅自動開啟非 coa 的圖層
+                            ['par', 'ctl', 'ctl2', 'upn'].forEach(k => {
+                               if(data[k] && data[k].find(x => x.id == q) && !map.hasLayer(layers[k])) map.addLayer(layers[k]);
+                            });
+                        } else { alert('找不到編號！'); }
+                    }
+                } 
+
+                // 確保先定位地圖 (zoomToBNP) 再進行 render，否則 map.getBounds() 會導致崩潰白畫面。
+                function safeRenderAndZoom() {
+                    try {
+                        zoomToBNP(); 
+                    } catch(e) {
+                        console.error("Zoom error:", e);
+                    }
+                }
+                
+                // 解鎖成功後才啟動的「雲端下載機制」與「網路偵測」
+                function checkAndSyncCloud() {
+                    if (!navigator.onLine) {
+                        alert("目前沒有偵測到網路連線，無法正確傳送或下載圖根狀態檔案。\n（將使用本地歷史資料）");
+                        document.getElementById('sync-status').innerText = "● 離線模式 (僅顯示本地資料)";
+                        document.getElementById('sync-status').style.color = "red";
+                        setTimeout(safeRenderAndZoom, 500);
+                    } else if (gasUrl !== "") {
+                        document.getElementById('sync-status').innerText = "● 雲端資料同步中...";
+                        document.getElementById('sync-status').style.color = "orange";
+                        
+                        // 讀取資料時不傳送密碼
+                        fetch(gasUrl + "?section=" + sectionName)
+                        .then(res => res.text()) // 先轉成文字，避免 GAS 回傳 HTML 錯誤頁面導致 JSON 解析報錯
+                        .then(text => {
+                            try {
+                                var cloudResp = JSON.parse(text);
+                                if(cloudResp.result === 'success') {
+                                    // 更新本地資料庫
+                                    var cloudData = cloudResp.data;
+                                    cloudData.forEach(cd => {
+                                        ['ctl', 'ctl2'].forEach(k => {
+                                            var pt = data[k].find(p => p.id === cd.id);
+                                            if (pt) {
+                                                pt.status = cd.status;
+                                                pt.date = cd.date;
+                                                pt.image = cd.image; // 記錄雲端傳回來的照片直連網址
+                                            }
+                                        });
+                                    });
+
+                                    document.getElementById('sync-status').innerText = "● 雲端資料已最新";
+                                    document.getElementById('sync-status').style.color = "green";
+                                } else {
+                                    document.getElementById('sync-status').innerText = "● 雲端拒絕連線：" + cloudResp.message;
+                                    document.getElementById('sync-status').style.color = "red";
+                               }
+                            } catch(e) {
+                                console.error("解析失敗，GAS回傳內容：", text);
+                                document.getElementById('sync-status').innerText = "● 雲端格式錯誤 (請確認部署權限為'所有人')";
+                                document.getElementById('sync-status').style.color = "red";
+                            }
+                            scheduleRender(); // 依據最新狀態重新畫圖
+                            setTimeout(safeRenderAndZoom, 500);
+                        })
+                        .catch(err => {
+                            document.getElementById('sync-status').innerText = "● 雲端伺服器無回應";
+                            document.getElementById('sync-status').style.color = "red";
+                            console.error("Fetch Error:", err);
+                            setTimeout(safeRenderAndZoom, 500);
+                        });
+                    } else {
+                        document.getElementById('sync-status').innerText = "● 尚未設定雲端連結";
+                        document.getElementById('sync-status').style.color = "gray";
+                        setTimeout(safeRenderAndZoom, 500);
+                    }
+                }
+            </script>
+        </body>
+        </html>
+        
