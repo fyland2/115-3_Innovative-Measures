@@ -1,0 +1,669 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>BD3002 牛稠坑段七星小段 v66系統</title>
+            <meta charset="utf-8" />
+            <!-- 加入參照保護策略，這對於在本地端顯示 Google Drive 圖片至關重要！ -->
+            <meta name="referrer" content="no-referrer" />
+            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />                                                                                                         
+            <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+            <style>
+                body { margin: 0; display: flex; font-family: "Microsoft JhengHei", sans-serif; background: white; overflow: hidden; }
+                
+                /* 密碼鎖定畫面的樣式 */
+                #lock-screen {
+                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                    background: #eef2f5; z-index: 9999; display: flex;
+                    flex-direction: column; justify-content: center; align-items: center;
+                }
+                .lock-box {
+                    background: white; padding: 40px; border-radius: 12px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.15); text-align: center; max-width: 90%; width: 350px;
+                }
+                .lock-box h2 { margin-top: 0; color: #1a73e8; font-size: 24px; }
+                .lock-box input {
+                    width: 100%; padding: 12px; margin: 20px 0; font-size: 16px;
+                    border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;
+                    text-align: center; letter-spacing: 2px;
+                }
+                .lock-box button {
+                    background: #1a73e8; color: white; border: none; padding: 12px;
+                    font-size: 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold;
+                }
+                .lock-box button:hover { background: #1557b0; }
+                
+                /* 側邊欄過場動畫與收合樣式 */
+                #sidebar { 
+                    width: 220px; height: 100vh; background: #f8f9fa; border-right: 1px solid #ddd; 
+                    padding: 15px; box-sizing: border-box; z-index: 2000; overflow-y: auto; 
+                    transition: margin-left 0.3s ease;
+                }
+                #sidebar.collapsed { margin-left: -220px; }
+                
+                /* 地圖容器與漢堡按鈕樣式 */                                                            
+                #map-container { flex: 1; position: relative; height: 100vh; }
+                #map { width: 100%; height: 100%; background: white; }
+                
+                /* 側邊欄開關按鈕 (漢堡選單) */
+                #menu-toggle {
+                    position: absolute; top: 15px; left: 15px; z-index: 4000; 
+                    background: white; border: 2px solid #ccc; border-radius: 4px; 
+                    padding: 5px 10px; cursor: pointer; font-size: 20px; box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+                    /* 覆寫 button 的 width: 100%，讓漢堡按鈕恢復正常方形 */
+                    width: auto !important; margin: 0 !important;
+                }
+
+                /* 將 Leaflet 預設的縮放按鈕 (+/-) 往下推，避免跟上方的漢堡選單疊加打架 */
+                .leaflet-top.leaflet-left {
+                    margin-top: 60px;
+                }
+                #coords-info { position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 12px; border-radius: 5px; font-size: 13px; z-index: 3000; pointer-events: none; }
+                .label-box { font-weight: bold; background: none; border: none; text-shadow: 1px 1px #fff; }
+                .zoom-btn { background: #28a745; color: white; border: none; border-radius: 4px; padding: 6px; cursor: pointer; font-size: 12px; margin-top: 4px; width: 100%; }
+                /* 修正按鈕與文字一行顯示的控制項樣式 */
+                .ctrl-row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; font-size: 14px; }
+                .ctrl-row .val-display { min-width: 30px; text-align: center; font-weight: bold; }
+                .adj-btn { width: 35px; height: 35px; border-radius: 4px; border: 1px solid #ccc; background: #eee; cursor: pointer; font-weight: bold; font-size: 16px; }
+                 
+                input, button, select { width: 100%; margin: 8px 0; padding: 10px; box-sizing: border-box; }
+                /* 覆寫按鈕樣式，讓 + - 按鈕不被上面的 width: 100% 影響 */
+                .adj-btn { width: 35px !important; padding: 5px !important; margin: 0 5px !important; font-size: 16px; font-weight: bold; cursor: pointer; background: #e0e0e0; border: 1px solid #ccc; border-radius: 4px; }
+                .adj-btn:hover { background: #d0d0d0; }
+                
+                h4 { margin: 15px 0 5px 0; color: #333; }               
+                .popup-img { width: 100%; max-width: 200px; min-height: 150px; margin-top: 10px; border: 1px solid #ccc; display: block; background: #f0f0f0; }
+                .popup-content { font-size: 13px; line-height: 1.5; min-width: 200px; }
+                .btn-save { background: #007bff; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; margin-top: 10px; font-weight: bold; }
+                .btn-save:disabled { background: #ccc; }
+                
+                /* 優化 Leaflet 行動端圖層控制項樣式 (定位移至右上，巨大化按鈕、層級拉高) */
+                .leaflet-control-layers { 
+                    box-shadow: 0 1px 7px rgba(0,0,0,0.4) !important;
+                    border-radius: 8px !important;
+                    z-index: 5000 !important; /* 拉到最高層級 */
+                }
+                /* 巨大化圖層控制按鈕 (ICON) */
+                .leaflet-control-layers-toggle {
+                    width: 50px !important;
+                    height: 50px !important;
+                    background-size: 30px 30px !important;
+                    background-position: center !important;
+                }
+                /* 展開後的清單容器：加入最大高度與滾動，防止螢幕外切邊 */
+                .leaflet-control-layers-expanded {
+                    padding: 10px !important;
+                    font-size: 12px !important; /* 行動端文字加大 */
+                    max-height: 50vh !important; /* 最大高度 50% 螢幕，過長自動出現滾動條 */
+                    overflow-y: auto !important;
+                    min-width: 130px !important;
+                }
+                /* 每個圖層選項加大觸控範圍 */
+                .leaflet-control-layers-overlays label, .leaflet-control-layers-base label {
+                    white-space: nowrap; 
+                    display: block; 
+                    margin: 8px 0 !important; /* 間距拉開，避免誤觸 */
+                    padding: 4px 0 !important;
+                }
+                /* 勾選框放大 */
+                .leaflet-control-layers input[type="checkbox"], 
+                .leaflet-control-layers input[type="radio"] { 
+                    width: 20px !important;
+                    height: 20px !important;
+                    margin: 0 8px 0 0 !important; 
+                    display: inline-block !important;
+                    vertical-align: middle;    
+                }
+            </style>
+        </head>
+        <body>
+            <!-- 密碼鎖定畫面 -->
+            <div id="lock-screen">
+                <div class="lock-box">
+                    <h2>🔒 BD3002 牛稠坑段七星小段 解鎖</h2>
+                    <p style="color:#666; font-size:13px;">本圖資已採用軍規級加密<br>請輸入密碼以解鎖地圖與座標</p>
+                    <input type="password" id="map-pwd" placeholder="請輸入解鎖密碼..." onkeypress="if(event.key === 'Enter') unlockMap()">
+                    <button onclick="unlockMap()">解密並開啟地圖</button>
+                </div>
+            </div>                                                
+            <div id="sidebar">
+                <h3>BD3002 牛稠坑段七星小段</h3>
+                <input type="text" id="sq" placeholder="輸入地號或點號..." onkeypress="if(event.key === 'Enter') find()">
+                <button onclick="find()">搜尋定位</button>
+                <hr>
+                <h4>圖層重新定位</h4>
+                <button class="zoom-btn" onclick="zoomTo('bnp')">定位地籍全圖</button>
+                <button class="zoom-btn" onclick="zoomTo('ctl')">定位圖根分佈</button>
+                <hr>
+                
+                <div style="display: flex; align-items: center; margin: 10px 0; font-size: 14px;">
+                    <span style="flex: 1;">字體大小:</span>
+                    <button class="adj-btn" onclick="changeSize('font', -2)">-</button>
+                    <span id="font-size-display" style="width: 30px; text-align: center; font-weight: bold;">12</span>
+                    <button class="adj-btn" onclick="changeSize('font', 2)">+</button>
+                </div>
+                
+                <div style="display: flex; align-items: center; margin: 10px 0; font-size: 14px;">
+                    <span style="flex: 1;">點標大小:</span>
+                    <button class="adj-btn" onclick="changeSize('point', -1)">-</button>
+                    <span id="point-size-display" style="width: 30px; text-align: center; font-weight: bold;">6</span>
+                    <button class="adj-btn" onclick="changeSize('point', 1)">+</button>
+                </div>
+                <div style="margin-top:20px; font-size:12px;">
+                    <span style="color:red;">●</span> 健在圖根<br>
+                    <span style="color:#d3d3d3;">●</span> 遺失圖根
+                </div>
+                <div id="sync-status" style="margin-top:10px; font-size:11px; font-weight:bold; color: gray;">● 系統啟動中...</div>
+            </div>
+            <div id="map-container">
+                <button id="menu-toggle" onclick="toggleSidebar()">☰</button>
+                <div id="coords-info">Y (北/7位): 0.00, X (東/6位): 0.00</div>
+                <div id="map"></div>
+            </div>
+            <script>
+                var gasUrl = "https://script.google.com/macros/s/AKfycbwxqRhensyiIb3ZOH8T_1AKk5K-9msU3tS6dvA4P5TvmkqXBTxi9DwHfc7UtUai7-Dc/exec"; // 連結 GAS 網址
+                // 傳送給後端 GAS 依然使用純英文的 section_name，確保程式不被中文干擾
+                var sectionName = "BD3002";// 提供給 JavaScript 知道這是哪個段
+                var fontSize = 12;
+                var pointSize = 6;
+                
+                // 新增全域變數記錄大小
+                var currentFontSize = 12;
+                var currentPointSize = 6;
+                
+                // 宣告全域變數，確保解鎖後再進行初始化
+                var map, data, parcelData, layers, overlays, renderTimer;
+
+                // 處理時區與日期格式，將 Google Sheet 的 UTC 時間轉回台灣當地時間
+                function formatTime(val) {
+                    if (!val || val === "-") return "-";
+                    var d = new Date(val);
+                    if (isNaN(d.getTime())) return val; // 如果解析失敗，保留原字串
+                    return d.toLocaleString('zh-TW', {hour12: false});
+                }
+
+                // 防呆級完美相容的解密演算法，支援所有老舊設備與平板，徹底解決 "密碼錯誤" 的假警報
+                function rc4Decrypt(b64Data, password) {
+                    // 1. 確保密碼是字串，轉換為通用 UTF-8 位元組
+                    var pwdUtf8 = unescape(encodeURIComponent(password));
+                    var key = new Uint8Array(pwdUtf8.length);
+                    for(var i = 0; i < pwdUtf8.length; i++) {
+                        key[i] = pwdUtf8.charCodeAt(i);
+                    }
+
+                    // 移除耗時的全域空白替換(因 Python 產出保證無空白)，直接進行解碼，縮短解析時間
+                                                               
+                    var binary_string = window.atob(b64Data);
+                    var len = binary_string.length;
+                    var cryptBytes = new Uint8Array(len);
+                    for (var i = 0; i < len; i++) {
+                        cryptBytes[i] = binary_string.charCodeAt(i);
+                    }
+
+                    // 3. 執行 RC4
+                    // 使用 Int32Array 取代普通 Array，大幅提升巨量迴圈的運算速度 (JIT優化)
+                    var S = new Int32Array(256);
+                    for (var i = 0; i < 256; i++) S[i] = i;
+                    var j = 0;
+                    for (var i = 0; i < 256; i++) {
+                        j = (j + S[i] + key[i % key.length]) % 256;
+                        var temp = S[i]; S[i] = S[j]; S[j] = temp;
+                    }
+                    
+                    var x = 0, y = 0;
+                    var decryptedBytes = new Uint8Array(cryptBytes.length);
+                    for (var k = 0; k < cryptBytes.length; k++) {
+                        x = (x + 1) % 256;
+                        y = (y + S[x]) % 256;
+                        var temp2 = S[x]; S[x] = S[y]; S[y] = temp2;
+                        decryptedBytes[k] = cryptBytes[k] ^ S[(S[x] + S[y]) % 256];
+                    }
+                    
+                    // 4. 完美相容所有的解碼模式 (如果新設備用高速引擎，舊設備用安全模式)
+                    if (typeof TextDecoder !== 'undefined') {
+                        return new TextDecoder('utf-8').decode(decryptedBytes);
+                    } else {
+                        var decryptedStr = "";
+                        for (var k = 0; k < decryptedBytes.length; k += 10000) {
+                            var chunk = Array.prototype.slice.call(decryptedBytes.subarray(k, k + 10000));
+                            decryptedStr += String.fromCharCode.apply(null, chunk);
+                        }
+                        return decodeURIComponent(escape(decryptedStr));
+                    }
+                }
+
+                // 強化版 Google Drive 網址轉換器，支援更多格式並強制轉換為直連預覽圖
+                function getCloudImgUrl(rawUrl) {
+                    if (!rawUrl || rawUrl === "") return "";
+                    // 如果已經是直連格式，直接回傳
+                    if (rawUrl.includes("drive.google.com/uc?")) return rawUrl;
+                    
+                    // 嘗試捕捉各種格式的 ID (通常是一串長達 25 個字元以上的英數字與符號)
+                    var idMatch = rawUrl.match(/[-\w]{25,}/); 
+                    if (idMatch) {
+                        // 使用 Google 官方的 Thumbnail API 來要求縮圖，這招保證能正確顯示，且無視 Cookie 阻擋
+                        return "https://drive.google.com/thumbnail?id=" + idMatch[0] + "&sz=w800";
+                    }
+                    return rawUrl;
+                }
+                
+               // 防呆機制：自動清除手機輸入密碼時，結尾容易誤按的「空白鍵」
+                function unlockMap() {
+                    var pwd = document.getElementById('map-pwd').value;
+                    if(!pwd) return;
+                    pwd = pwd.trim(); // 防呆去空白
+                    try {
+                        // 嘗試解密
+                        data = JSON.parse(rc4Decrypt("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", pwd));
+                        parcelData = JSON.parse(rc4Decrypt("XhQ=", pwd));
+                        
+                        // 隱藏鎖定畫面
+                        document.getElementById('lock-screen').style.display = 'none';
+                        
+                        // 啟動地圖與資料庫
+                        initMap();
+                    } catch (e) {
+                        // 提供更詳盡的報錯訊息
+                        alert("密碼錯誤或解密失敗！\n(請確認密碼沒有打錯，或截圖此訊息回報：\n" + e.name + " - " + e.message + ")");
+                    }
+                }
+
+                // 地圖初始化流程 (將原本直接寫在底層的程式碼包裝進來)
+                function initMap() {
+                    // 定義專屬 Canvas 渲染器，加入 tolerance: 30。這會為點位周圍增加 30 像素的隱形觸控範圍，平板秒點秒中！
+                    var touchRenderer = L.canvas({ padding: 0.5, tolerance: 30 });
+                    map = L.map('map', { crs: L.CRS.Simple, renderer: touchRenderer, preferCanvas: true, minZoom: -20, maxZoom: 20 });
+                    
+                    // 修正底圖 URL
+                    var googleSat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                        subdomains:['mt0','mt1','mt2','mt3'],
+                        attribution: 'Google Maps'
+                    });
+                    var googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                        subdomains:['mt0','mt1','mt2','mt3'],
+                        attribution: 'Google Maps'
+                    });
+                
+                    layers = {
+                        bnp: L.featureGroup().addTo(map), // 預設開啟 BNP
+                        par: L.layerGroup(),
+                        ctl: L.layerGroup().addTo(map),
+                        ctl2: L.layerGroup(), // 補建圖根圖層，預設關閉
+                        coa: L.layerGroup(), 
+                        upn: L.layerGroup()
+                    };
+
+                    // 動態產生右上方圖層選單 (如果 ctl2 有資料才加上 圖根(補建) 選項)
+                    var overlays = {
+                        "地籍線(BNP)": layers.bnp,
+                        "地號(PAR)": layers.par,
+                        "圖根(CTL)": layers.ctl
+                        // "界址(COA)": layers.coa,
+                        // "中心樁(UPN)": layers.upn
+                    };
+                    if (data.ctl2 && data.ctl2.length > 0) {
+                        overlays["圖根(補建)"] = layers.ctl2;
+                    }
+                    overlays["界址(COA)"] = layers.coa;
+                    overlays["中心樁(UPN)"] = layers.upn;
+                    // 將圖層控制改為預設收合 (collapsed: true)，並放置於右上角 (topright)，確保不再被系統導覽列干擾
+                    L.control.layers({
+                        "空白背景": L.layerGroup(),
+                        "Google 衛星影像": googleSat,
+                        "Google 混合地圖": googleHybrid
+                    }, overlays, { position: 'topright', collapsed: true }).addTo(map);
+                    
+                    parcelData.forEach(p => { 
+                        L.polyline(p.path, {color: 'black', weight: 1.2}).addTo(layers.bnp); 
+                    });
+                    // 滑鼠座標偵測                
+                    map.on('mousemove', function(e) {
+                        document.getElementById('coords-info').innerHTML = "Y (北): " + e.latlng.lat.toFixed(2) + ", X (東): " + e.latlng.lng.toFixed(2);
+                    });
+                    
+                    // 改用防抖機制排程繪製，確保拖動地圖不卡頓
+                    map.on('moveend zoomend overlayadd', scheduleRender);
+
+                    // 解鎖成功後，才啟動雲端連線同步
+                    checkAndSyncCloud();
+                }
+                // 側邊欄收合邏輯
+                function toggleSidebar() {
+                    document.getElementById('sidebar').classList.toggle('collapsed');
+                    setTimeout(function() { map.invalidateSize(); }, 300);
+                }
+
+                // 控制字體與點標大小的邏輯
+                function changeSize(type, delta) {
+                    if (type === 'font') {
+                        currentFontSize += delta;
+                        if (currentFontSize < 8) currentFontSize = 8;
+                        if (currentFontSize > 60) currentFontSize = 60;
+                        document.getElementById('font-size-display').innerText = currentFontSize;
+                    } else if (type === 'point') {
+                        currentPointSize += delta;
+                        if (currentPointSize < 1) currentPointSize = 1;
+                        if (currentPointSize > 30) currentPointSize = 30;
+                        document.getElementById('point-size-display').innerText = currentPointSize;
+                    }
+                    scheduleRender();
+                }
+                function zoomToBNP() {
+                    var bounds = layers.bnp.getBounds();
+                    if(bounds.isValid()) map.fitBounds(bounds);
+                }
+                
+                function zoomTo(type) {
+                    if(type === 'bnp') {
+                        zoomToBNP();
+                    } else {
+                        var points = data[type].map(i => i.pos);
+                        if(points.length > 0) {
+                            var b = L.latLngBounds(points);
+                            map.fitBounds(b);
+                            if(!map.hasLayer(layers[type])) map.addLayer(layers[type]);
+                            scheduleRender();
+                        } else { alert("該圖層無資料！"); }
+                    }
+                }
+                
+                // 新增壓縮圖片邏輯，減少雲端儲存壓力
+                function compressAndPreview(input, id) {
+                    if (input.files && input.files[0]) {
+                        var reader = new FileReader();
+                        reader.onload = function (e) {
+                            var img = new Image();
+                            img.src = e.target.result;
+                            img.onload = function () {
+                                var canvas = document.createElement('canvas');
+                                var ctx = canvas.getContext('2d');
+                                var maxWidth = 800; // 限制最大寬度以壓縮
+                                var scale = maxWidth / img.width;
+                                canvas.width = maxWidth;
+                                canvas.height = img.height * scale;
+                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                var dataUrl = canvas.toDataURL('image/jpeg', 0.5); // 0.5 品質壓縮
+                                document.getElementById('preview-' + id).src = dataUrl;
+                                // 將壓縮後的 Base64 存在隱藏欄位或變數中
+                                window['currentImg_' + id] = dataUrl;
+                            };
+                        };
+                        reader.readAsDataURL(input.files[0]);
+                    }
+                }
+                
+                // 寫入雲端時，彈跳視窗要求使用者輸入密碼，並修復 CORS 攔截
+                function updateStatusToCloud(pid) {
+                    if (!navigator.onLine) {
+                        alert('目前沒有偵測到網路連線，無法正確傳送圖根遺失檔案。');
+                        return;
+                    }
+
+                    // 彈跳視窗要求輸入密碼
+                    var userKey = prompt("請輸入職員編號：");
+                    if (userKey === null || userKey === "") {
+                        alert("已取消同步操作。");
+                        return;
+                    }
+                    var status = document.getElementById('status-select-' + pid).value;
+                    var btn = document.querySelector('.btn-save');
+                    var imgData = window['currentImg_' + pid] || "";
+                    
+                    if(!gasUrl) {
+                        alert('尚未設定 GAS URL！目前僅為本地模擬。');
+                        return;
+                    }
+
+                    btn.disabled = true;
+                    btn.innerText = '雲端寫入中...';
+
+                    // 改用 XMLHttpRequest 底層連線方式，確保所有平板瀏覽器都不會被 CORS 預檢攔截
+                    var xhr = new XMLHttpRequest();
+                    xhr.open("POST", gasUrl, true);
+                    xhr.onreadystatechange = function() {
+                        if (xhr.readyState === 4) {
+                            btn.disabled = false;
+                            btn.innerText = '同步狀態至雲端';
+                            try {
+                                var resp = JSON.parse(xhr.responseText);
+
+                                if (resp.result === 'success') {
+                                    alert('已成功同步至 Google Sheet！');
+                                    // 即時更新本地資料，這樣標籤才會立刻變色
+                                    var target = [...data.ctl, ...(data.ctl2 || [])].find(p => p.id === pid);
+                                    if (target) {
+                                        target.status = status;
+                                        // 確保剛上傳時也能即時轉成本地格式
+                                        target.date = new Date().toISOString(); 
+                                    }
+                                    scheduleRender();
+                                } else {
+                                    alert('同步被拒絕：' + resp.message);
+                                }
+                            } catch(e) {
+                                alert('伺服器回傳格式錯誤，請檢查 GAS 部署。\n錯誤訊息：' + e);
+                            }
+                        }
+                    };
+                    xhr.send(JSON.stringify({
+                        section: sectionName, // 傳送段代碼給 A 欄
+                        id: pid,
+                        status: status,
+                        image: imgData,
+                        timestamp: new Date().toLocaleString('zh-TW', {hour12: false}), // 寫入時確保是當地時間格式
+                        key: userKey // 傳送使用者剛才輸入的密碼
+                    }));
+                }
+
+                // 防抖機制(Debounce)，提升滑動地圖時的流暢度
+                function scheduleRender() {
+                    clearTimeout(renderTimer);
+                    // 將防抖時間由 50ms 延長至 150ms，降低連續滑動地圖時的運算頻率                                                                                       
+                    renderTimer = setTimeout(render, 150);
+                }
+                // 搜尋與渲染功能
+                function render() {
+                    // 加上 pad(0.2) 緩衝區，預先渲染畫面外 20% 的範圍，減少滑動露白與頻繁重繪
+                    var b = map.getBounds().pad(0.2), z = map.getZoom(), s = currentFontSize;
+                    
+                    // 加入 ctl2 到渲染清單中                                                      
+                    ['par', 'ctl', 'ctl2', 'coa', 'upn'].forEach(k => {
+                        var group = layers[k];
+                        if (!map.hasLayer(group)) return;
+                        group.clearLayers();
+                        // 效能大躍進！地圖縮得太小時，直接隱藏文字標籤，避免幾千個 DOM 節點拖慢載入速度。
+                        var showLabel = true;
+                        if (k === 'par' && z < -3) showLabel = false; // 地號縮太小不顯示
+                        if ((k === 'ctl' || k === 'ctl2') && z < -2) showLabel = false; // 圖根縮太小不顯示
+                        if (k === 'upn' && z < -2) showLabel = false; // 中心樁縮太小不顯示
+                        if (k === 'coa' && z < 1) showLabel = false;  // 界址點維持原樣，放大才顯示
+                        
+                        data[k].forEach(i => {
+                            if (b.contains(i.pos)) {
+                                // 新增遺失變色邏輯
+                                var isLost = (i.status === 'lost');
+                                // 使用變數 mainColor 取代原本死寫的顏色; 將 ctl2 視為圖根，同樣賦予紅色/灰色
+                                var mainColor = isLost ? '#d3d3d3' : ((k=='ctl'||k=='ctl2')?'red':(k=='upn'?'green':'#666'));
+                                // 使用變數 labelColor 取代原本死寫的顏色
+                                var labelColor = isLost ? '#d3d3d3' : (k=='par'?'blue':((k=='ctl'||k=='ctl2')?'red':(k=='upn'?'green':'#666')));
+
+                                if (k !== 'par') {
+                                    // 改用 currentPointSize 變數控制圓點半徑
+                                    var marker = L.circleMarker(i.pos, { radius: currentPointSize, color: mainColor, fillOpacity: 1, weight: 1 }).addTo(group);
+                                    
+                                    // 重新設計彈窗 UI，同步按鈕置底，座標三位小數
+                                    // 如果不是 coa (界址點)，才綁定調查彈窗！這樣 coa 就只會有圓點跟文字。
+                                    if (k !== 'coa') {
+                                        
+                                        // 利用延遲載入 (Lazy Loading) 技巧。
+                                        // 將字串拼接放入函數中，確保只有「使用者點擊點位」時才執行字串組合與圖層建立，減少高達 90% 以上的無效記憶體消耗
+                                        marker.bindPopup(function() {
+                                            // 處理照片顯示邏輯，若有雲端照片優先顯示
+                                            var cloudUrl = getCloudImgUrl(i.image);
+                                            var imgSrc = (cloudUrl !== "") ? cloudUrl : './photos/' + i.id + '.jpg';
+                                            
+                                            // 內建 SVG 無照片佔位圖，乾淨又專業
+                                            var noPhotoSvg = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22150%22%3E%3Crect width=%22200%22 height=%22150%22 fill=%22%23f4f4f4%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-family=%22sans-serif%22 font-size=%2216px%22 fill=%22%23888%22%3E無照片資訊%3C/text%3E%3C/svg%3E";
+
+                                            return '<div class="popup-content">' +
+                                                '<b>點號：' + i.id + '</b><br>' +
+                                                '座標(Y)：' + i.pos[0].toFixed(3) + '<br>' +
+                                                '座標(X)：' + i.pos[1].toFixed(3) + '<br>' +
+                                                // 套用 formatTime 解決 UTC 時區字串顯示問題
+                                                '更新日期：' + formatTime(i.date) + '<br>' +
+                                                '<hr>' +
+                                                '選擇狀態：' +
+                                                '<select id="status-select-' + i.id + '">' +
+                                                '<option value="active" ' + (!isLost ? 'selected' : '') + '>健在</option>' +
+                                                '<option value="lost" ' + (isLost ? 'selected' : '') + '>遺失</option>' +
+                                                '</select><br>' +
+                                                '現場拍照/上傳：<br>' +
+                                                '<input type="file" accept="image/*" onchange="compressAndPreview(this, \'' + i.id + '\')" style="font-size:11px;">' +
+                                                // 使用 SVG 取代破圖
+                                                '<img id="preview-' + i.id + '" class="popup-img" src="' + imgSrc + '" onerror="this.src=\'' + noPhotoSvg + '\'"><br>' +
+                                                '<button class="btn-save" onclick="updateStatusToCloud(\'' + i.id + '\')">同步狀態至雲端</button>' +
+                                                '</div>';
+                                        });
+                                    }  
+                                }
+                                
+                                if (showLabel) {
+                                    L.marker(i.pos, {
+                                        icon: L.divIcon({
+                                            className: 'label-box',
+                                            html: '<span style="font-size:'+s+'px; color:'+labelColor+'">'+i.id+'</span>',
+                                            iconAnchor: [-5, 15]
+                                        })
+                                    }).addTo(group);
+                                }    
+                            }
+                        });
+                    });
+                }
+           
+                // 優化搜尋系統與高亮顯示                                                                  
+                function find() {
+                    var q = document.getElementById('sq').value.trim();
+                    if (!q) return;
+
+                    // 擴充1：清除先前的紅色高亮框線
+                    if (window.searchHighlight) {
+                        map.removeLayer(window.searchHighlight);
+                    }
+
+                    // 擴充2：判斷輸入內容。純數字(或帶減號，如 810 或 810-1)視為搜尋地號；含英文視為圖根                                                                                                                           
+                    var isParcel = /^[0-9\\-]+$/.test(q);  
+                    
+                    if (isParcel) {
+                        // 擴充1：使用 parcelData (BNP) 來尋找整塊地的所有頂點
+                        var targetParcel = parcelData.find(p => p.id == q);
+                        if (targetParcel) {
+                            // 縮放至該地號的整個地籍範圍
+                            var bounds = L.latLngBounds(targetParcel.path);
+                            map.fitBounds(bounds);
+                            
+                            // 擴充1：用紅色、75% 透明度填滿多邊形框選範圍
+                            window.searchHighlight = L.polygon(targetParcel.path, {
+                                color: 'red',
+                                weight: 2,
+                                fillColor: 'pink',
+                                fillOpacity: 0.75
+                            }).addTo(map);
+
+                            // 自動開啟地號圖層 (PAR) 以利觀看
+                            if (!map.hasLayer(layers['par'])) map.addLayer(layers['par']);
+                        } else {
+                            // 防呆機制：若 BNP 沒畫到這塊地，退回使用 PAR 點位來定位
+                            var fallbackPar = data.par.find(i => i.id == q);
+                            if (fallbackPar) {
+                                map.flyTo(fallbackPar.pos, 4);
+                                if (!map.hasLayer(layers['par'])) map.addLayer(layers['par']);
+                                alert('該地號無地籍線範圍資料，已定位至地號文字中心。');
+                            } else {
+                                alert('圖資中找不到地號：' + q);
+                            }
+                        }
+                    } else {
+                        // 擴充2：輸入含英文 (如 CTL01)，搜尋圖根點或中心樁                              
+                        var t = [...data.ctl, ...data.ctl2, ...data.upn].find(i => i.id == q); // 搜尋清單排除 coa 
+                        if(t) {
+                            map.flyTo(t.pos, 4);
+                            // 僅自動開啟非 coa 的圖層
+                            ['par', 'ctl', 'ctl2', 'upn'].forEach(k => {
+                               if(data[k] && data[k].find(x => x.id == q) && !map.hasLayer(layers[k])) map.addLayer(layers[k]);
+                            });
+                        } else { alert('找不到編號！'); }
+                    }
+                } 
+
+                // 確保先定位地圖 (zoomToBNP) 再進行 render，否則 map.getBounds() 會導致崩潰白畫面。
+                function safeRenderAndZoom() {
+                    try {
+                        zoomToBNP(); 
+                    } catch(e) {
+                        console.error("Zoom error:", e);
+                    }
+                }
+                
+                // 解鎖成功後才啟動的「雲端下載機制」與「網路偵測」
+                function checkAndSyncCloud() {
+                    if (!navigator.onLine) {
+                        alert("目前沒有偵測到網路連線，無法正確傳送或下載圖根狀態檔案。\n（將使用本地歷史資料）");
+                        document.getElementById('sync-status').innerText = "● 離線模式 (僅顯示本地資料)";
+                        document.getElementById('sync-status').style.color = "red";
+                        setTimeout(safeRenderAndZoom, 500);
+                    } else if (gasUrl !== "") {
+                        document.getElementById('sync-status').innerText = "● 雲端資料同步中...";
+                        document.getElementById('sync-status').style.color = "orange";
+                        
+                        // 讀取資料時不傳送密碼
+                        fetch(gasUrl + "?section=" + sectionName)
+                        .then(res => res.text()) // 先轉成文字，避免 GAS 回傳 HTML 錯誤頁面導致 JSON 解析報錯
+                        .then(text => {
+                            try {
+                                var cloudResp = JSON.parse(text);
+                                if(cloudResp.result === 'success') {
+                                    // 更新本地資料庫
+                                    var cloudData = cloudResp.data;
+                                    cloudData.forEach(cd => {
+                                        ['ctl', 'ctl2'].forEach(k => {
+                                            var pt = data[k].find(p => p.id === cd.id);
+                                            if (pt) {
+                                                pt.status = cd.status;
+                                                pt.date = cd.date;
+                                                pt.image = cd.image; // 記錄雲端傳回來的照片直連網址
+                                            }
+                                        });
+                                    });
+
+                                    document.getElementById('sync-status').innerText = "● 雲端資料已最新";
+                                    document.getElementById('sync-status').style.color = "green";
+                                } else {
+                                    document.getElementById('sync-status').innerText = "● 雲端拒絕連線：" + cloudResp.message;
+                                    document.getElementById('sync-status').style.color = "red";
+                               }
+                            } catch(e) {
+                                console.error("解析失敗，GAS回傳內容：", text);
+                                document.getElementById('sync-status').innerText = "● 雲端格式錯誤 (請確認部署權限為'所有人')";
+                                document.getElementById('sync-status').style.color = "red";
+                            }
+                            scheduleRender(); // 依據最新狀態重新畫圖
+                            setTimeout(safeRenderAndZoom, 500);
+                        })
+                        .catch(err => {
+                            document.getElementById('sync-status').innerText = "● 雲端伺服器無回應";
+                            document.getElementById('sync-status').style.color = "red";
+                            console.error("Fetch Error:", err);
+                            setTimeout(safeRenderAndZoom, 500);
+                        });
+                    } else {
+                        document.getElementById('sync-status').innerText = "● 尚未設定雲端連結";
+                        document.getElementById('sync-status').style.color = "gray";
+                        setTimeout(safeRenderAndZoom, 500);
+                    }
+                }
+            </script>
+        </body>
+        </html>
+        
