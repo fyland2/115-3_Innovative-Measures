@@ -4,6 +4,8 @@
         <head>
             <title>BD2413 北陽段</title>
             <meta charset="utf-8" />
+            
+            <!-- Google Analytics 追蹤碼 -->
             <script async src="https://www.googletagmanager.com/gtag/js?id=G-H43JW8D78W"></script>
             <script>
               window.dataLayer = window.dataLayer || [];
@@ -15,6 +17,7 @@
             <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />                                                                                                         
             <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
             <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
             <style>
                 body { margin: 0; display: flex; font-family: "Microsoft JhengHei", sans-serif; background: white; overflow: hidden; }
                 #lock-screen {
@@ -66,19 +69,36 @@
                 .btn-save { background: #007bff; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; margin-top: 10px; font-weight: bold; }
                 .btn-save:disabled { background: #ccc; }
                 .leaflet-control-layers { 
-                    box-shadow: 0 1px 7px rgba(0,0,0,0.4) !important; border-radius: 8px !important; z-index: 5000 !important;
+                    box-shadow: 0 1px 7px rgba(0,0,0,0.4) !important;
+                    border-radius: 8px !important;
+                    z-index: 5000 !important; 
                 }
                 .leaflet-control-layers-toggle {
-                    width: 50px !important; height: 50px !important; background-size: 30px 30px !important; background-position: center !important;
+                    width: 50px !important;
+                    height: 50px !important;
+                    background-size: 30px 30px !important;
+                    background-position: center !important;
                 }
                 .leaflet-control-layers-expanded {
-                    padding: 10px !important; font-size: 12px !important; max-height: 50vh !important; overflow-y: auto !important; min-width: 130px !important;
+                    padding: 10px !important;
+                    font-size: 12px !important; 
+                    max-height: 50vh !important; 
+                    overflow-y: auto !important;
+                    min-width: 130px !important;
                 }
                 .leaflet-control-layers-overlays label, .leaflet-control-layers-base label {
-                    white-space: nowrap; display: block; margin: 8px 0 !important; padding: 4px 0 !important;
+                    white-space: nowrap; 
+                    display: block; 
+                    margin: 8px 0 !important; 
+                    padding: 4px 0 !important;
                 }
-                .leaflet-control-layers input[type="checkbox"], .leaflet-control-layers input[type="radio"] { 
-                    width: 20px !important; height: 20px !important; margin: 0 8px 0 0 !important; display: inline-block !important; vertical-align: middle;    
+                .leaflet-control-layers input[type="checkbox"], 
+                .leaflet-control-layers input[type="radio"] { 
+                    width: 20px !important;
+                    height: 20px !important;
+                    margin: 0 8px 0 0 !important; 
+                    display: inline-block !important;
+                    vertical-align: middle;    
                 }
             </style>
         </head>
@@ -93,6 +113,7 @@
             </div>                                                
             <div id="sidebar">
                 <h3>BD2413 北陽段</h3>
+                <div style="font-size:12px; color:#1a73e8; margin-bottom:10px; font-weight:bold;">📍 系統格式：TWD67</div>
                 <input type="text" id="sq" placeholder="輸入地號或點號..." onkeypress="if(event.key === 'Enter') find()">
                 <button onclick="find()">搜尋定位</button>
                 <hr>
@@ -127,8 +148,26 @@
                 <div id="map"></div>
             </div>
             <script>
-                var gasUrl = "https://script.google.com/macros/s/AKfycbwxqRhensyiIb3ZOH8T_1AKk5K-9msU3tS6dvA4P5TvmkqXBTxi9DwHfc7UtUai7-Dc/exec"; 
+                var gasUrl = "https://script.google.com/macros/s/AKfycbwxqRhensyiIb3ZOH8T_1AKk5K-9msU3tS6dvA4P5TvmkqXBTxi9DwHfc7UtUai7-Dc/exec";
                 var sectionName = "BD2413";
+                var crs_type = "TWD67";
+                
+                // 💡 動態建立坐標系統轉換參數
+                if (crs_type === "TWD67") {
+                    // TWD67 需使用七參數轉換至 WGS84
+                    proj4.defs("LOCAL_CRS", "+proj=tmerc +lat_0=0 +lon_0=121 +k=0.9999 +x_0=250000 +y_0=0 +ellps=aust_SA +towgs84=-752,-358,-179,-.0000011698,.0000018398,.0000009822,.00002329 +units=m +no_defs");
+                } else if (crs_type === "TWD97" || crs_type === "TWD97[2010]") {
+                    // TWD97 參數
+                    proj4.defs("LOCAL_CRS", "+proj=tmerc +lat_0=0 +lon_0=121 +k=0.9999 +x_0=250000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
+                }
+
+                // 統一把本地座標轉換成 Leaflet 需要的格式
+                function to_latlon(y, x) {
+                    if (crs_type === "圖解") return [y, x]; // 圖解區不作經緯度轉換
+                    var wgs84 = proj4("LOCAL_CRS", "EPSG:4326", [x, y]);
+                    return [wgs84[1], wgs84[0]]; // Leaflet 需要的是 [Lat, Lon]
+                }
+
                 var fontSize = 12;
                 var pointSize = 6;
                 var currentFontSize = 12;
@@ -138,18 +177,21 @@
                 function formatTime(val) {
                     if (!val || val === "-") return "-";
                     var d = new Date(val);
-                    if (isNaN(d.getTime())) return val; 
+                    if (isNaN(d.getTime())) return val;
                     return d.toLocaleString('zh-TW', {hour12: false});
                 }
 
                 function rc4Decrypt(b64Data, password) {
                     var pwdUtf8 = unescape(encodeURIComponent(password));
                     var key = new Uint8Array(pwdUtf8.length);
-                    for(var i = 0; i < pwdUtf8.length; i++) { key[i] = pwdUtf8.charCodeAt(i); }
+                    for(var i = 0; i < pwdUtf8.length; i++) {
+                        key[i] = pwdUtf8.charCodeAt(i);
+                    }
+                                                               
                     var binary_string = window.atob(b64Data);
-                    var len = binary_string.length;
-                    var cryptBytes = new Uint8Array(len);
-                    for (var i = 0; i < len; i++) { cryptBytes[i] = binary_string.charCodeAt(i); }
+                    var cryptBytes = new Uint8Array(binary_string.length);
+                    for (var i = 0; i < binary_string.length; i++) cryptBytes[i] = binary_string.charCodeAt(i);
+
                     var S = new Int32Array(256);
                     for (var i = 0; i < 256; i++) S[i] = i;
                     var j = 0;
@@ -176,26 +218,6 @@
                         return decodeURIComponent(escape(decryptedStr));
                     }
                 }
-
-                function getCloudImgUrl(rawUrl) {
-                    if (!rawUrl || rawUrl === "") return "";
-                    
-                    // 💡 [修復] 防呆：如果是 Base64 影像資料，直接回傳，絕對不能丟給下面的 ID 擷取器
-                    if (rawUrl.startsWith("data:image")) return rawUrl;
-                    
-                    // 如果已經是 Google Drive 直連或高速圖床，直接回傳
-                    if (rawUrl.includes("drive.google.com/uc?")) return rawUrl;
-                    if (rawUrl.includes("lh3.googleusercontent.com")) return rawUrl;
-                    
-                    // 💡 [修復] 必須確定是 Google Drive 的網址，才去擷取 25 碼的 ID
-                    if (rawUrl.includes("drive.google.com")) {
-                        var idMatch = rawUrl.match(/[-\w]{25,}/); 
-                        if (idMatch) {
-                            return "https://lh3.googleusercontent.com/d/" + idMatch[0];
-                        }
-                    }
-                    return rawUrl;
-                }
                 
                 function unlockMap() {
                     var pwd = document.getElementById('map-pwd').value;
@@ -213,15 +235,43 @@
 
                 function initMap() {
                     var touchRenderer = L.canvas({ padding: 0.5, tolerance: 30 });
-                    map = L.map('map', { crs: L.CRS.Simple, renderer: touchRenderer, preferCanvas: true, minZoom: -20, maxZoom: 20 });
+                    var mapOptions = { renderer: touchRenderer, preferCanvas: true };
                     
+                    // 💡 如果是圖解區，切換成純白畫布模式 (不會載入任何地圖底圖)
+                    if (crs_type === "圖解") {
+                        mapOptions.crs = L.CRS.Simple;
+                        mapOptions.minZoom = -20;
+                        mapOptions.maxZoom = 20;
+                    }
+                    
+                    map = L.map('map', mapOptions);
+                    
+                    var baseLayers = { "空白背景": L.layerGroup() };
+                    
+                    // 💡 只有非圖解區 (數值區)，才匯入電子地圖與 Google 地圖
+                    if (crs_type !== "圖解") {
+                        var nlscMap = L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}', {
+                            attribution: '國土測繪中心', maxZoom: 20
+                        });
                     var googleSat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-                        subdomains:['mt0','mt1','mt2','mt3'], attribution: 'Google Maps'
+                        subdomains:['mt0','mt1','mt2','mt3'],
+                        attribution: 'Google Maps'
                     });
                     var googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-                        subdomains:['mt0','mt1','mt2','mt3'], attribution: 'Google Maps'
+                        subdomains:['mt0','mt1','mt2','mt3'],
+                        attribution: 'Google Maps'
                     });
-                
+                        
+                        baseLayers["國土測繪中心 (通用版)"] = nlscMap;
+                        baseLayers["Google 衛星影像"] = googleSat;
+                        baseLayers["Google 混合地圖"] = googleHybrid;
+                        
+                        // 數值區預設開啟測繪中心地圖
+                        nlscMap.addTo(map);
+                    } else {
+                        // 圖解區維持空白背景
+                        baseLayers["空白背景"].addTo(map);
+                    }
                     layers = {
                         bnp: L.featureGroup().addTo(map),
                         par: L.layerGroup(),
@@ -232,21 +282,34 @@
                     };
 
                     var overlays = {
-                        "地籍線(BNP)": layers.bnp, "地號(PAR)": layers.par, "圖根(CTL)": layers.ctl
+                        "地籍線(BNP)": layers.bnp,
+                        "地號(PAR)": layers.par,
+                        "圖根(CTL)": layers.ctl
                     };
-                    if (data.ctl2 && data.ctl2.length > 0) { overlays["圖根(補建)"] = layers.ctl2; }
+                    if (data.ctl2 && data.ctl2.length > 0) {
+                        overlays["圖根(補建)"] = layers.ctl2;
+                    }
                     overlays["界址(COA)"] = layers.coa;
                     overlays["中心樁(UPN)"] = layers.upn;
                     
-                    L.control.layers({
-                        "空白背景": L.layerGroup(), "Google 衛星影像": googleSat, "Google 混合地圖": googleHybrid
-                    }, overlays, { position: 'topright', collapsed: true }).addTo(map);
+                    L.control.layers(baseLayers, overlays, { position: 'topright', collapsed: true }).addTo(map);
                     
-                    parcelData.forEach(p => { L.polyline(p.path, {color: 'black', weight: 1.2}).addTo(layers.bnp); });
-                    
-                    map.on('mousemove', function(e) {
-                        document.getElementById('coords-info').innerHTML = "Y (北): " + e.latlng.lat.toFixed(2) + ", X (東): " + e.latlng.lng.toFixed(2);
+                    parcelData.forEach(p => { 
+                        // 依照系統動態轉換線段端點
+                        var latlngPath = p.path.map(pt => to_latlon(pt[0], pt[1]));
+                        L.polyline(latlngPath, {color: 'black', weight: 1.2}).addTo(layers.bnp); 
                     });
+                                  
+                    map.on('mousemove', function(e) {
+                        if (crs_type === "圖解") {
+                            document.getElementById('coords-info').innerHTML = "Y (北): " + e.latlng.lat.toFixed(2) + ", X (東): " + e.latlng.lng.toFixed(2);
+                        } else {
+                            // 將游標經緯度逆轉為地政本地坐標
+                            var twd = proj4("EPSG:4326", "LOCAL_CRS", [e.latlng.lng, e.latlng.lat]);
+                            document.getElementById('coords-info').innerHTML = "Y (北): " + twd[1].toFixed(2) + ", X (東): " + twd[0].toFixed(2);
+                        }
+                    });
+                    
                     map.on('moveend zoomend overlayadd', scheduleRender);
                     checkAndSyncCloud();
                 }
@@ -280,7 +343,7 @@
                     if(type === 'bnp') {
                         zoomToBNP();
                     } else {
-                        var points = data[type].map(i => i.pos);
+                        var points = data[type].map(i => to_latlon(i.pos[0], i.pos[1]));
                         if(points.length > 0) {
                             var b = L.latLngBounds(points);
                             map.fitBounds(b);
@@ -299,9 +362,11 @@
                             img.onload = function () {
                                 var canvas = document.createElement('canvas');
                                 var ctx = canvas.getContext('2d');
-                                var maxWidth = 800; 
+                                // 【效能優化】將寬度限制由 800 降至 600，進一步減少儲存於雲端的 Base64 體積
+                                var maxWidth = 600; 
                                 var scale = maxWidth / img.width;
-                                canvas.width = maxWidth;
+                                if (scale > 1) scale = 1; // 避免小圖片被放大
+                                canvas.width = img.width * scale;
                                 canvas.height = img.height * scale;
                                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                                 var dataUrl = canvas.toDataURL('image/jpeg', 0.5); 
@@ -315,13 +380,15 @@
                 
                 function updateStatusToCloud(pid) {
                     if (!navigator.onLine) {
-                        alert('目前沒有網路連線。');
+                        alert('目前沒有偵測到網路連線，無法正確傳送圖根遺失檔案。');
                         return;
                     }
 
                     var userKey = prompt("請輸入職員編號：");
-                    if (userKey === null || userKey === "") return;
-                    
+                    if (userKey === null || userKey === "") {
+                        alert("已取消同步操作。");
+                        return;
+                    }
                     var statusSelect = document.getElementById('status-select-' + pid);
                     var status = statusSelect.value;
                     
@@ -333,8 +400,10 @@
                     var btn = document.querySelector('.btn-save');
                     var imgData = window['currentImg_' + pid] || "";
                     
-                    if(!gasUrl) return;
-
+                    if(!gasUrl) {
+                        alert('目前沒有偵測到網路連線，僅為本地模擬。');
+                        return;
+                    }
                     btn.disabled = true;
                     btn.innerText = '雲端寫入中...';
 
@@ -347,7 +416,7 @@
                             try {
                                 var resp = JSON.parse(xhr.responseText);
                                 if (resp.result === 'success') {
-                                    alert('已成功同步至雲端！');
+                                    alert('已成功同步至 Google Sheet！');
                                     var target = [...data.ctl, ...(data.ctl2 || [])].find(p => p.id === pid);
                                     if (target) {
                                         target.status = status;
@@ -369,13 +438,17 @@
                         }
                     };
                     xhr.send(JSON.stringify({
-                        section: sectionName, id: pid, status: status, image: imgData,
-                        timestamp: new Date().toLocaleString('zh-TW', {hour12: false}), key: userKey 
+                        section: sectionName, 
+                        id: pid,
+                        status: status,
+                        image: imgData,
+                        timestamp: new Date().toLocaleString('zh-TW', {hour12: false}), 
+                        key: userKey 
                     }));
                 }
 
                 function scheduleRender() {
-                    clearTimeout(renderTimer);
+                    clearTimeout(renderTimer);                                                                                   
                     renderTimer = setTimeout(render, 150);
                 }
 
@@ -385,29 +458,59 @@
                         var group = layers[k];
                         if (!map.hasLayer(group)) return;
                         group.clearLayers();
+                        // 💡 根據圖解或數值區給予不同的自動隱藏縮放等級
                         var showLabel = true;
+                        if (crs_type === "圖解") {
                         if (k === 'par' && z < -3) showLabel = false; 
                         if ((k === 'ctl' || k === 'ctl2') && z < -2) showLabel = false; 
                         if (k === 'upn' && z < -2) showLabel = false; 
                         if (k === 'coa' && z < 1) showLabel = false;  
-                        
+                        } else {
+                            if (k === 'par' && z < 16) showLabel = false; 
+                            if ((k === 'ctl' || k === 'ctl2') && z < 15) showLabel = false; 
+                            if (k === 'upn' && z < 16) showLabel = false; 
+                            if (k === 'coa' && z < 18) showLabel = false; 
+                        } 
                         data[k].forEach(i => {
-                            if (b.contains(i.pos)) {
+                            var latlngPos = to_latlon(i.pos[0], i.pos[1]);
+                            if (b.contains(latlngPos)) {
                                 var isLost = (i.status === 'lost');
                                 var isUnreported = (i.status === 'unreported' || !i.status);
                                 var isActive = (i.status === 'active');
 
                                 var fillOp = isUnreported ? 0.0 : 1.0; 
-                                var weightOp = isUnreported ? 3 : 1; 
                                 var mainColor = isLost ? '#d3d3d3' : ((k=='ctl'||k=='ctl2')?'red':(k=='upn'?'green':'#666'));
                                 var labelColor = isLost ? '#d3d3d3' : (k=='par'?'blue':((k=='ctl'||k=='ctl2')?'red':(k=='upn'?'green':'#666')));
 
                                 if (k !== 'par') {
-                                    var marker = L.circleMarker(i.pos, { radius: currentPointSize, color: mainColor, fillOpacity: fillOp, weight: weightOp }).addTo(group);
+                                    var marker = L.circleMarker(latlngPos, { radius: currentPointSize, color: mainColor, fillOpacity: fillOp, weight: isUnreported ? 2 : 1 }).addTo(group);
+                                    
                                     if (k !== 'coa') {
                                         marker.bindPopup(function() {
-                                            var cloudUrl = getCloudImgUrl(i.image);
-                                            var imgSrc = (cloudUrl !== "") ? cloudUrl : './photos/' + i.id + '.jpg';
+                                            var cloudUrl = i.image || "";
+                                            var imgSrc = './photos/' + i.id + '.jpg';
+                                            var photoLinkHtml = '';
+
+                                            // 💡 這裡的 \w 已無須跳脫，直接寫給 JS 看即可
+                                            if (cloudUrl !== "") {
+                                                if (cloudUrl.startsWith("data:image")) {
+                                                    imgSrc = cloudUrl; 
+                                                } else {
+                                                    var driveIdMatch = cloudUrl.match(/[-\w]{25,}/);
+                                                    if (driveIdMatch) {
+                                                        var fileId = driveIdMatch[0];
+                                                        // 💡 嘗試使用 Google Thumbnail API 來顯示預覽圖
+                                                        imgSrc = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w600";
+                                                        
+                                                        // 提供原本的 Drive 預覽網址作為備案按鈕
+                                                        var viewUrl = "https://drive.google.com/file/d/" + fileId + "/view";
+                                                        photoLinkHtml = '<a href="' + viewUrl + '" target="_blank" style="display:block; margin-top:8px; padding: 5px; background: #e8f0fe; text-align:center; color:#1a73e8; border-radius: 4px; text-decoration:none; font-weight:bold; font-size:14px;">🔗 點此開啟雲端照片</a>';
+                                                    } else {
+                                                        imgSrc = cloudUrl;
+                                                    }
+                                                }
+                                            }
+                                            
                                             var noPhotoSvg = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22150%22%3E%3Crect width=%22200%22 height=%22150%22 fill=%22%23f4f4f4%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-family=%22sans-serif%22 font-size=%2216px%22 fill=%22%23888%22%3E無照片資訊%3C/text%3E%3C/svg%3E";
 
                                             return '<div class="popup-content">' +
@@ -424,15 +527,20 @@
                                                 '</select><br>' +
                                                 '現場拍照/上傳：<br>' +
                                                 '<input type="file" accept="image/*" onchange="compressAndPreview(this, \'' + i.id + '\')" style="font-size:11px;">' +
-                                                '<img id="preview-' + i.id + '" class="popup-img" src="' + imgSrc + '" onerror="this.src=\'' + noPhotoSvg + '\'"><br>' +
+                                                '<img id="preview-' + i.id + '" class="popup-img" src="' + imgSrc + '" onerror="this.src=\'' + noPhotoSvg + '\'">' +
+                                                photoLinkHtml + 
                                                 '<button class="btn-save" onclick="updateStatusToCloud(\'' + i.id + '\')">同步狀態至雲端</button>' +
                                                 '</div>';
                                         });
                                     }  
                                 }
                                 if (showLabel) {
-                                    L.marker(i.pos, {
-                                        icon: L.divIcon({ className: 'label-box', html: '<span style="font-size:'+s+'px; color:'+labelColor+'">'+i.id+'</span>', iconAnchor: [-5, 15] })
+                                    L.marker(latlngPos, {
+                                        icon: L.divIcon({
+                                            className: 'label-box',
+                                            html: '<span style="font-size:'+s+'px; color:'+labelColor+'">'+i.id+'</span>',
+                                            iconAnchor: [-5, 15]
+                                        })
                                     }).addTo(group);
                                 }    
                             }
@@ -447,38 +555,55 @@
                         gtag('event', 'search_point', { 'search_term': q, 'section': sectionName });
                     }
                     if (window.searchHighlight) { map.removeLayer(window.searchHighlight); }
-                    var isParcel = /^[0-9\\-]+$/.test(q);  
+                    var isParcel = /^[0-9\-]+$/.test(q);  
                     if (isParcel) {
                         var targetParcel = parcelData.find(p => p.id == q);
                         if (targetParcel) {
-                            var bounds = L.latLngBounds(targetParcel.path);
+                            var latlngPath = targetParcel.path.map(pt => to_latlon(pt[0], pt[1]));
+                            var bounds = L.latLngBounds(latlngPath);
                             map.fitBounds(bounds);
-                            window.searchHighlight = L.polygon(targetParcel.path, { color: 'red', weight: 2, fillColor: 'pink', fillOpacity: 0.75 }).addTo(map);
+                            
+                            window.searchHighlight = L.polygon(latlngPath, {
+                                color: 'red',
+                                weight: 2,
+                                fillColor: 'pink',
+                                fillOpacity: 0.75
+                            }).addTo(map);
                             if (!map.hasLayer(layers['par'])) map.addLayer(layers['par']);
                         } else {
                             var fallbackPar = data.par.find(i => i.id == q);
                             if (fallbackPar) {
-                                map.flyTo(fallbackPar.pos, 4);
+                                var zoomLvl = (crs_type === "圖解") ? 4 : 18;
+                                map.flyTo(to_latlon(fallbackPar.pos[0], fallbackPar.pos[1]), zoomLvl);
                                 if (!map.hasLayer(layers['par'])) map.addLayer(layers['par']);
+                                alert('該地號無地籍線範圍資料，已定位至地號文字中心。');
+                            } else {
+                                alert('圖資中找不到地號：' + q);
                             }
                         }
-                    } else {
-                        var t = [...data.ctl, ...data.ctl2, ...data.upn].find(i => i.id == q);
+                    } else {                              
+                        var t = [...data.ctl, ...data.ctl2, ...data.upn].find(i => i.id == q); 
                         if(t) {
-                            map.flyTo(t.pos, 4);
+                            var zoomLvl = (crs_type === "圖解") ? 4 : 18;
+                            map.flyTo(to_latlon(t.pos[0], t.pos[1]), zoomLvl);
                             ['par', 'ctl', 'ctl2', 'upn'].forEach(k => {
                                if(data[k] && data[k].find(x => x.id == q) && !map.hasLayer(layers[k])) map.addLayer(layers[k]);
                             });
-                        }
+                        } else { alert('找不到編號！'); }
                     }
                 } 
 
                 function safeRenderAndZoom() {
-                    try { zoomToBNP(); } catch(e) { }
+                    try {
+                        zoomToBNP(); 
+                    } catch(e) {
+                        console.error("Zoom error:", e);
+                    }
                 }
                 
                 function checkAndSyncCloud() {
                     if (!navigator.onLine) {
+                        alert("目前沒有偵測到網路連線，無法正確傳送或下載圖根狀態檔案。\\n（將使用本地歷史資料）");
                         document.getElementById('sync-status').innerText = "● 離線模式 (僅顯示本地資料)";
                         document.getElementById('sync-status').style.color = "red";
                         setTimeout(safeRenderAndZoom, 500);
@@ -506,11 +631,12 @@
                                     document.getElementById('sync-status').innerText = "● 雲端資料已最新";
                                     document.getElementById('sync-status').style.color = "green";
                                 } else {
-                                    document.getElementById('sync-status').innerText = "● 雲端拒絕連線";
+                                    document.getElementById('sync-status').innerText = "● 雲端拒絕連線：" + cloudResp.message;
                                     document.getElementById('sync-status').style.color = "red";
                                }
                             } catch(e) {
-                                document.getElementById('sync-status').innerText = "● 雲端格式錯誤";
+                                console.error("解析失敗，GAS回傳內容：", text);
+                                document.getElementById('sync-status').innerText = "● 雲端格式錯誤 (請確認部署權限為'所有人')";
                                 document.getElementById('sync-status').style.color = "red";
                             }
                             scheduleRender(); 
