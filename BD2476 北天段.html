@@ -136,7 +136,7 @@
                     <button class="adj-btn" onclick="changeSize('point', 1)">+</button>
                 </div>
                 <div style="margin-top:20px; font-size:12px; line-height: 1.8;">
-                    <span style="color:red; font-size:16px;">●</span> 健在圖根 (已查報)<br>
+                    <span style="color:red; font-size:16px;">●</span> 保存完好圖根 (已查報)<br>
                     <span style="color:red; font-size:16px;">○</span> 未查報 (空心圓)<br>
                     <span style="color:#d3d3d3; font-size:16px;">●</span> 遺失圖根 (已作廢)
                 </div>
@@ -393,7 +393,7 @@
                     var status = statusSelect.value;
                     
                     if (status === 'unreported') {
-                        alert("請選擇「健在」或「遺失」狀態後再同步！");
+                        alert("請選擇「保存完好」或「遺失」狀態後再同步！");
                         return;
                     }
                     
@@ -522,7 +522,7 @@
                                                 '選擇狀態：' +
                                                 '<select id="status-select-' + i.id + '">' +
                                                 '<option value="unreported" ' + (isUnreported ? 'selected' : '') + ' style="display:none">-- 待查報 --</option>' +
-                                                '<option value="active" ' + (isActive ? 'selected' : '') + '>健在</option>' +
+                                                '<option value="active" ' + (isActive ? 'selected' : '') + '>保存完好</option>' +
                                                 '<option value="lost" ' + (isLost ? 'selected' : '') + '>遺失</option>' +
                                                 '</select><br>' +
                                                 '現場拍照/上傳：<br>' +
