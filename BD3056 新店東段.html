@@ -137,7 +137,7 @@
                 </div>
                 <div style="margin-top:20px; font-size:12px; line-height: 1.8;">
                     <span style="color:red; font-size:16px;">●</span> 保存完好圖根 (已查報)<br>
-                    <span style="color:red; font-size:16px;">○</span> 未查報 (空心圓)<br>
+                    <span style="color:#66B3FF; font-size:16px;">○</span> 未查報 <br>
                     <span style="color:#d3d3d3; font-size:16px;">●</span> 遺失圖根 (已作廢)
                 </div>
                 <div id="sync-status" style="margin-top:10px; font-size:11px; font-weight:bold; color: gray;">● 系統啟動中...</div>
@@ -479,9 +479,9 @@
                                 var isActive = (i.status === 'active');
 
                                 var fillOp = isUnreported ? 0.0 : 1.0; 
-                                var mainColor = isLost ? '#d3d3d3' : ((k=='ctl'||k=='ctl2')?'red':(k=='upn'?'green':'#666'));
-                                var labelColor = isLost ? '#d3d3d3' : (k=='par'?'blue':((k=='ctl'||k=='ctl2')?'red':(k=='upn'?'green':'#666')));
-
+                                var mainColor = isLost ? '#d3d3d3' : ((k=='ctl'||k=='ctl2') ? (isUnreported ? '#66B3FF' : 'red') : (k=='upn'?'green':'#666'));
+                                var labelColor = isLost ? '#d3d3d3' : (k=='par'?'blue':((k=='ctl'||k=='ctl2') ? (isUnreported ? '#66B3FF' : 'red') : (k=='upn'?'green':'#666')));
+                                
                                 if (k !== 'par') {
                                     var marker = L.circleMarker(latlngPos, { radius: currentPointSize, color: mainColor, fillOpacity: fillOp, weight: isUnreported ? 2 : 1 }).addTo(group);
                                     
