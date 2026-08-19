@@ -289,7 +289,7 @@
                     if (data.ctl2 && data.ctl2.length > 0) {
                         overlays["圖根(補建)"] = layers.ctl2;
                     }
-                    overlays["界址(COA)"] = layers.coa;
+                    overlays["界址(COA)"] = layers.upn;
                     overlays["中心樁(UPN)"] = layers.upn;
                     
                     L.control.layers(baseLayers, overlays, { position: 'topright', collapsed: true }).addTo(map);
@@ -611,7 +611,8 @@
                         document.getElementById('sync-status').innerText = "● 雲端資料同步中...";
                         document.getElementById('sync-status').style.color = "orange";
                         
-                        fetch(gasUrl + "?section=" + sectionName)
+                        // 💡 這裡拿掉 "?section=" 的段名限制，改成加上 timestamp 避免 Google 快取，全資料庫依點號配對
+                        fetch(gasUrl + "?t=" + new Date().getTime())
                         .then(res => res.text()) 
                         .then(text => {
                             try {
@@ -620,6 +621,7 @@
                                     var cloudData = cloudResp.data;
                                     cloudData.forEach(cd => {
                                         ['ctl', 'ctl2'].forEach(k => {
+                                            // 💡 這裡直接在整包資料中，用點號 (cd.id) 去找對應的點位
                                             var pt = data[k].find(p => p.id === cd.id);
                                             if (pt) {
                                                 pt.status = cd.status;
