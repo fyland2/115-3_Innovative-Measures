@@ -611,34 +611,53 @@
                         document.getElementById('sync-status').innerText = "● 雲端資料同步中...";
                         document.getElementById('sync-status').style.color = "orange";
                         
-                        // 💡 這裡拿掉 "?section=" 的段名限制，改成加上 timestamp 避免 Google 快取，全資料庫依點號配對
+                        // 💡 這裡拿掉 "?section=" 的段名限制，改成加上 timestamp 避免 Google 快取，改為「全資料庫依區段與點號」配對
                         fetch(gasUrl + "?t=" + new Date().getTime())
                         .then(res => res.text()) 
                         .then(text => {
                             try {
                                 var cloudResp = JSON.parse(text);
+                                console.log("【地政查報系統 - 雲端連線測試】GAS回傳的原始內容:", cloudResp); // 開發者工具檢查用
+                                
                                 if(cloudResp.result === 'success') {
                                     var cloudData = cloudResp.data;
+                                   var matchCount = 0; // 配對成功計數器
+                                    
                                     cloudData.forEach(cd => {
-                                        ['ctl', 'ctl2'].forEach(k => {
-                                            // 💡 這裡直接在整包資料中，用點號 (cd.id) 去找對應的點位
-                                            var pt = data[k].find(p => p.id === cd.id);
-                                            if (pt) {
-                                                pt.status = cd.status;
-                                                pt.date = cd.date;
-                                                pt.image = cd.image; 
-                                            }
-                                        });
+                                        // 💡 暴力相容模式：不管 GAS 傳回來的是叫 section 還是 A，叫 id 還是 B，通通無縫接起來
+                                        var cdSec = String(cd.section || cd.A || cd.段代碼 || cd.a || "").trim().toUpperCase();
+                                        var secName = String(sectionName || "").trim().toUpperCase();
+                                        var cdId = String(cd.id || cd.B || cd.點號 || cd.b || "").trim().toUpperCase();
+                                        var cdStatus = String(cd.status || cd.D || cd.狀態 || cd.d || "").trim();
+
+                                        // 支援全碼比對，也支援前4碼比對 (應付圖根跨小段共用)
+                                        if (cdSec === secName || (cdSec.length >= 4 && secName.length >= 4 && cdSec.substring(0, 4) === secName.substring(0, 4))) {
+                                            ['ctl', 'ctl2'].forEach(k => {
+                                                var pt = data[k].find(p => String(p.id).trim().toUpperCase() === cdId);
+                                                if (pt) {
+                                                    pt.status = cdStatus; 
+                                                    pt.date = cd.date || cd.E || cd.日期 || "";
+                                                    pt.image = cd.image || cd.F || cd.照片 || ""; 
+                                                    matchCount++;
+                                                    console.log(`✅ 成功配對！找到點號: ${cdId}, 狀態更新為: ${cdStatus}`);
+                                                }
+                                            });
+                                        }
                                     });
-                                    document.getElementById('sync-status').innerText = "● 雲端資料已最新";
+                                    
+                                    document.getElementById('sync-status').innerText = "● 雲端資料已最新 (配對 " + matchCount + " 筆)";
                                     document.getElementById('sync-status').style.color = "green";
+                                    
+                                    if (matchCount === 0) {
+                                        console.warn(`❌ 抓了 ${cloudData.length} 筆資料，但沒有半筆配對成功！請按 F12 檢查上方印出的 JSON 原始內容，確認欄位名稱 (key) 是否正確。`);
+                                    }
                                 } else {
                                     document.getElementById('sync-status').innerText = "● 雲端拒絕連線：" + cloudResp.message;
                                     document.getElementById('sync-status').style.color = "red";
                                }
                             } catch(e) {
                                 console.error("解析失敗，GAS回傳內容：", text);
-                                document.getElementById('sync-status').innerText = "● 雲端格式錯誤 (請確認部署權限為'所有人')";
+                                document.getElementById('sync-status').innerText = "● 雲端格式錯誤";
                                 document.getElementById('sync-status').style.color = "red";
                             }
                             scheduleRender(); 
